@@ -273,8 +273,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    // paddingVertical: 12,
-    backgroundColor: '#2E7D32',
+gi    backgroundColor: '#2E7D32',
     paddingTop: 0,
   },
   backButton: {
