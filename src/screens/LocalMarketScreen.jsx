@@ -67,7 +67,7 @@ const LocalMarketScreen = () => {
       {/* 2. Search Bar Section */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <TouchableOpacity style={styles.locationButton}>
+          <TouchableOpacity style={styles.locationButton} onPress={() => {navigation.navigate('Profile')}}>
             <Image 
               source={require('../../assets/images/location.png')} 
               style={styles.locationIcon} 

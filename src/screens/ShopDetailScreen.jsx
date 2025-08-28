@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, Animated } from 'react-native';
 import React, { useRef, useState } from 'react';
-
 const ShopDetailScreen = ({ navigation,route }) => {
   const [isFavorite, setIsFavorite] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -246,12 +245,15 @@ const ShopDetailScreen = ({ navigation,route }) => {
           <TouchableOpacity style={styles.writeReviewButton}>
             <Text style={styles.writeReviewText}>Write a Review ✍️</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.writeReviewButton} onPress={()=>navigation.navigate('Products')}>
+            <Text style={styles.writeReviewText}>Products Screen</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Fixed Cart Button */}
       <View style={styles.cartContainer}>
-        <TouchableOpacity style={styles.cartButton}>
+        <TouchableOpacity style={styles.cartButton} onPress={()=>navigation.navigate('CartScreen')}>
           <Text style={styles.cartIcon}>🛒</Text>
           <View style={styles.cartInfo}>
             <Text style={styles.cartText}>View Cart (2 items)</Text>
@@ -273,7 +275,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-gi    backgroundColor: '#2E7D32',
+    backgroundColor: '#2E7D32',
     paddingTop: 0,
   },
   backButton: {

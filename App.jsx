@@ -5,7 +5,7 @@ const App = () => {
   return (
     <>
      {Platform.OS === 'android' && (
-        <View style={{ height: StatusBar.currentHeight, backgroundColor: '#0b0866' }} />
+        <View style={{ height: StatusBar.currentHeight, backgroundColor: '#186608ff' }} />
       )}
       <StatusBar 
         backgroundColor="#0b0866" 

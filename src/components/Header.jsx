@@ -1,9 +1,10 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native'
 import React, { useRef } from 'react'
-
+import { useNavigation } from '@react-navigation/native';
 const Header = () => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  
+  const navigation = useNavigation();
+
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.9,
@@ -18,6 +19,7 @@ const Header = () => {
       tension: 40,
       useNativeDriver: true,
     }).start();
+    navigation.navigate('CartScreen');
   };
 
   return (
