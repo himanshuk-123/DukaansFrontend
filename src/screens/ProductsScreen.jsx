@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,69 +10,79 @@ import {
   TextInput,
   Animated,
   Dimensions,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
+import productService from '../services/Products';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
-const ProductsScreen = ({ navigation }) => {
+const ProductsScreen = ({ navigation, route }) => {
+  const { shopId, shopName } = route.params || { shopId: null, shopName: 'Shop' };
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [cartItems, setCartItems] = useState(3);
-  const [cartTotal, setCartTotal] = useState(250);
-  const [products, setProducts] = useState([
-    {
-      id: 1,
-      name: 'Organic Apples',
-      description: 'Fresh from farm',
-      price: '₹120',
-      image: 'https://cdn.pixabay.com/photo/2017/09/26/13/42/apple-2788662_1280.jpg',
-      category: 'Fruits'
-    },
-    {
-      id: 2,
-      name: 'Bananas',
-      description: '1 dozen',
-      price: '₹50',
-      image: 'https://cdn.pixabay.com/photo/2017/06/27/22/21/banana-2449019_1280.jpg',
-      category: 'Fruits'
-    },
-    {
-      id: 3,
-      name: 'Carrots',
-      description: 'Fresh organic',
-      price: '₹40',
-      image: 'https://cdn.pixabay.com/photo/2017/06/09/17/36/carrots-2387394_1280.jpg',
-      category: 'Vegetables'
-    },
-    {
-      id: 4,
-      name: 'Milk',
-      description: 'Amul, 1L',
-      price: '₹65',
-      image: 'https://cdn.pixabay.com/photo/2017/07/05/15/41/milk-2474993_1280.jpg',
-      category: 'Dairy'
-    },
-    {
-      id: 5,
-      name: 'Potatoes',
-      description: '1kg pack',
-      price: '₹30',
-      image: 'https://cdn.pixabay.com/photo/2016/08/11/08/49/potatoes-1585075_1280.jpg',
-      category: 'Vegetables'
-    },
-    {
-      id: 6,
-      name: 'Chips',
-      description: 'Lays, 50g',
-      price: '₹20',
-      image: 'https://cdn.pixabay.com/photo/2016/11/20/09/06/bowl-1842294_1280.jpg',
-      category: 'Snacks'
-    },
-  ]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [addedProductIds, setAddedProductIds] = useState({});
 
-  const categories = ['All', 'Fruits', 'Vegetables', 'Dairy', 'Snacks'];
+  // Get cart context
+  const { addToCart: addItemToCart, cartItems, subtotal } = useCart();
+  const { isAuthenticated, requireAuth } = useAuth();
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const cartAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    fetchProducts();
+  }, [shopId]);
+
+  // Effect to filter products based on search query
+  useEffect(() => {
+    if (!products) return;
+    
+    if (searchQuery.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      const filtered = products.filter(product => 
+        product.name.toLowerCase().includes(lowercaseQuery) ||
+        (product.description && product.description.toLowerCase().includes(lowercaseQuery)) ||
+        (product.category_name && product.category_name.toLowerCase().includes(lowercaseQuery))
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchQuery, products]);
+
+  const fetchProducts = async () => {
+    if (!shopId) {
+      setError('Shop ID is required');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await productService.getAllShopProduct(shopId);
+      if (response && response.data && Array.isArray(response.data)) {
+        setProducts(response.data);
+        setFilteredProducts(response.data);
+      } else {
+        setProducts([]);
+        setFilteredProducts([]);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setError(error.message || 'Failed to fetch products');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -90,59 +100,146 @@ const ProductsScreen = ({ navigation }) => {
     }).start();
   };
 
-  const addToCart = (productId) => {
-    // Animation for adding to cart
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 0.9,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Update cart
-    setCartItems(cartItems + 1);
-    setCartTotal(cartTotal + 100); // Simplified calculation
-
-    // Show cart bar if it's the first item
-    if (cartItems === 0) {
-      Animated.timing(cartAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+  const addToCart = async (productData) => {
+    // Check if user is authenticated
+    const isAuthed = requireAuth({
+      feature: 'cart',
+      title: 'Sign in to Add to Cart',
+      message: 'Create an account or sign in to add items to your cart.',
+      returnTo: 'Products',
+      returnParams: { shopId, shopName }
+    });
+    
+    if (!isAuthed) {
+      return;
+    }
+    
+    try {
+      // Handle both cases - when passed a product object or just an ID
+      let product, productId;
+      
+      if (typeof productData === 'object') {
+        // If a product object was passed
+        product = productData;
+        productId = product.product_id;
+      } else {
+        // If just an ID was passed
+        productId = productData;
+        // Find the product in the products array
+        product = products.find(p => p.product_id === productId);
+        if (!product) {
+          console.error('Product not found:', productId);
+          return;
+        }
+      }
+      
+      // Convert product_id to number if it's a string
+      const parsedProductId = typeof productId === 'string' 
+        ? parseInt(productId, 10) 
+        : productId;
+      
+      // Animation for adding to cart
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.9,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      // Add to actual cart using the context
+      const result = await addItemToCart({
+        product_id: parsedProductId,
+        quantity: 1,
+        name: product.name,
+        price: product.price,
+        image: product.primary_image_url
+      }, {
+        routeName: 'Products',
+        params: { shopId, shopName }
+      });
+      
+      if (result?.success) {
+        // Show "Added" state for this product
+        setAddedProductIds(prev => ({
+          ...prev,
+          [productId]: true
+        }));
+        
+        // Animate cart button for confirmation
+        Animated.sequence([
+          Animated.timing(cartAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(cartAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ]).start();
+        
+        // Reset back to normal after 2 seconds
+        setTimeout(() => {
+          setAddedProductIds(prev => ({
+            ...prev,
+            [productId]: false
+          }));
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      Alert.alert(
+        "Error",
+        "Failed to add item to cart. Please try again.",
+        [{ text: "OK" }]
+      );
     }
   };
-
-  const filteredProducts = selectedCategory === 'All' 
-    ? products 
-    : products.filter(product => product.category === selectedCategory);
-
-  const renderProductItem = ({ item }) => (
+  const renderProductItem = ({ item }) => {
+    // Check if this product is in the "added" state
+    const isAdded = addedProductIds[item.product_id] || false;
+    
+    return (
     <TouchableOpacity
       style={styles.productCard}
-      onPress={() => navigation.navigate('ProductDetail', { product: item })}
+      onPress={() => navigation.navigate('ProductDetail', { productId: item.product_id })}
     >
-      <Image source={{ uri: item.image }} style={styles.productImage} />
+      <Image 
+        source={{ 
+          uri: item.primary_image_url
+        }} 
+        style={styles.productImage}
+        // defaultSource={require('../../assets/images/placeholder.png')}
+      />
       <View style={styles.productInfo}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productDescription}>{item.description}</Text>
-        <Text style={styles.productPrice}>{item.price}</Text>
+        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.productDescription} numberOfLines={2}>
+          {item.description || item.category_name || 'No description'}
+        </Text>
+        <Text style={styles.productPrice}>
+          ₹{item.price}
+          {item.discount_price && <Text style={styles.discountPrice}> ₹{item.discount_price}</Text>}
+        </Text>
       </View>
       <TouchableOpacity 
         style={styles.addButton}
-        onPress={() => addToCart(item.id)}
+        onPress={() => addToCart(item)}
       >
-        <Text style={styles.addButtonText}>+</Text>
+        <Text style={styles.addButtonText}>{isAdded ? 'Added ✓' : '+'}</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
+  };
 
+  // Category chip renderer is preserved but not currently used
+  /* 
   const renderCategoryChip = (category) => (
     <TouchableOpacity
       key={category}
@@ -162,6 +259,7 @@ const ProductsScreen = ({ navigation }) => {
       </Text>
     </TouchableOpacity>
   );
+  */
 
   return (
     <SafeAreaView style={styles.container}>
@@ -170,13 +268,16 @@ const ProductsScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fresh Mart</Text>
+        <Text style={styles.headerTitle}>{shopName || 'Products'}</Text>
         <View style={styles.cartContainer}>
-          <TouchableOpacity style={styles.cartButton}>
+          <TouchableOpacity 
+            style={styles.cartButton}
+            onPress={() => navigation.navigate('CartScreen')}
+          >
             <Text style={styles.cartIcon}>🛒</Text>
-            {cartItems > 0 && (
+            {cartItems.length > 0 && (
               <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartItems}</Text>
+                <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -191,20 +292,22 @@ const ProductsScreen = ({ navigation }) => {
             placeholder="Search products in this shop…"
             placeholderTextColor="#9E9E9E"
             style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.clearIcon}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         <TouchableOpacity style={styles.filterButton}>
           <Text style={styles.filterIcon}>⏷</Text>
         </TouchableOpacity>
       </View>
-      
-      <View>
-        <TouchableOpacity onPress={()=>navigation.navigate('ProductDetail')}>
-          <Text>View Product</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Category Filter */}
+      {/* Category Filter - Temporarily hidden */}
+      {/* 
       <View style={styles.categoryContainer}>
         <ScrollView
           horizontal
@@ -214,13 +317,27 @@ const ProductsScreen = ({ navigation }) => {
           {categories.map(renderCategoryChip)}
         </ScrollView>
       </View>
+      */}
 
       {/* Product Grid */}
-      {filteredProducts.length > 0 ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading products...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : filteredProducts.length > 0 ? (
         <FlatList
           data={filteredProducts}
           renderItem={renderProductItem}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => item.product_id.toString()}
           numColumns={2}
           contentContainerStyle={styles.productGrid}
           showsVerticalScrollIndicator={false}
@@ -228,15 +345,29 @@ const ProductsScreen = ({ navigation }) => {
       ) : (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🛒</Text>
-          <Text style={styles.emptyText}>No products found in this category.</Text>
-          <TouchableOpacity style={styles.browseButton}>
-            <Text style={styles.browseButtonText}>Browse All Products</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptyTitle}>No products found</Text>
+          {searchQuery ? (
+            <Text style={styles.emptyText}>
+              No products match your search "{searchQuery}".
+              Try a different search term or browse all products.
+            </Text>
+          ) : (
+            <Text style={styles.emptyText}>
+              There are no products available in this shop yet.
+            </Text>
+          )}
+          {searchQuery ? (
+            <TouchableOpacity 
+              style={styles.browseButton}
+              onPress={() => setSearchQuery('')}
+            >
+              <Text style={styles.browseButtonText}>Clear Search</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
-
       {/* Bottom Cart Bar */}
-      {cartItems > 0 && (
+      {cartItems.length > 0 && (
         <Animated.View 
           style={[
             styles.cartBar,
@@ -247,10 +378,13 @@ const ProductsScreen = ({ navigation }) => {
           ]}
         >
           <View style={styles.cartInfo}>
-            <Text style={styles.cartItemsText}>{cartItems} items</Text>
-            <Text style={styles.cartTotalText}>₹{cartTotal}.00</Text>
+            <Text style={styles.cartItemsText}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</Text>
+            <Text style={styles.cartTotalText}>₹{subtotal}</Text>
           </View>
-          <TouchableOpacity style={styles.cartActionButton}>
+          <TouchableOpacity 
+            style={styles.cartActionButton}
+            onPress={() => navigation.navigate('CartScreen')}
+          >
             <Text style={styles.cartActionText}>Go to Cart →</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -291,6 +425,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#212121',
+    flex: 1,
+    textAlign: 'center',
   },
   cartContainer: {
     position: 'relative',
@@ -305,10 +441,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#FF9800',
+    backgroundColor: '#FF5722',
     borderRadius: 10,
-    width: 18,
-    height: 18,
+    minWidth: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -337,6 +473,10 @@ const styles = StyleSheet.create({
   searchIcon: {
     marginRight: 8,
     color: '#9E9E9E',
+  },
+  clearIcon: {
+    color: '#9E9E9E',
+    fontSize: 16,
   },
   searchInput: {
     flex: 1,
@@ -424,6 +564,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2E7D32',
   },
+  discountPrice: {
+    fontSize: 12,
+    color: '#757575',
+    textDecorationLine: 'line-through',
+  },
   addButton: {
     position: 'absolute',
     bottom: 12,
@@ -440,6 +585,42 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#616161',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#F44336',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#FF5722',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -449,6 +630,12 @@ const styles = StyleSheet.create({
   emptyIcon: {
     fontSize: 64,
     marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 12,
   },
   emptyText: {
     fontSize: 16,

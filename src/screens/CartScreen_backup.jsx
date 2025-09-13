@@ -133,7 +133,7 @@ const CartScreen = ({ navigation }) => {
     // Use product_name from API or fallback to name
     const name = item.product_name || item.name;
     // Get image from different possible sources
-    const imageUrl = item.primary_image_url;
+    const imageUrl = item.primary_image_url || item.image || 'https://via.placeholder.com/150';
     // Calculate price - account for different API formats
     const price = typeof item.unit_price !== 'undefined' ? item.unit_price : item.price;
     // Get description - could be unit_name or description
@@ -144,6 +144,7 @@ const CartScreen = ({ navigation }) => {
         <Image 
           source={{ uri: imageUrl }} 
           style={styles.itemImage} 
+          defaultSource={require('../../assets/images/placeholder.png')}
         />
         
         <View style={styles.itemDetails}>
@@ -183,7 +184,6 @@ const CartScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
     );
-  };
 
   // Main render
   return (
@@ -229,7 +229,7 @@ const CartScreen = ({ navigation }) => {
           <Text style={styles.emptySubtitle}>Add products to get started.</Text>
           <TouchableOpacity 
             style={styles.browseButton}
-            onPress={() => navigation.navigate('MainTabs')}
+            onPress={() => navigation.navigate('LocalMarket')}
           >
             <Text style={styles.browseButtonText}>Browse Products</Text>
           </TouchableOpacity>
@@ -313,13 +313,7 @@ const CartScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.checkoutButton}
-            onPress={() => {
-              if (isAuthenticated) {
-                navigation.navigate('Checkout');
-              } else {
-                setLoginModalVisible(true);
-              }
-            }}
+            onPress={() => navigation.navigate('Checkout')}
           >
             <Text style={styles.checkoutButtonText}>Proceed to Checkout →</Text>
           </TouchableOpacity>
@@ -327,6 +321,9 @@ const CartScreen = ({ navigation }) => {
       )}
     </SafeAreaView>
   );
+};
+
+export default CartScreen;
 };
 
 const styles = StyleSheet.create({
@@ -640,6 +637,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 4,
   }
+});
+    color: '#333333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#777777',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  browseButton: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  browseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
 
 export default CartScreen;

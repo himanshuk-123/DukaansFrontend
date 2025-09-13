@@ -13,70 +13,10 @@ const ShopDetailScreen = ({ navigation, route }) => {
   const cartAnim = useRef(new Animated.Value(0)).current;
   const { item } = route.params;
   const { addToCart, cartItems, subtotal } = useCart();
-  const { isAuthenticated, user  } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  // Track which products have been added using their IDs
   const [addedProductIds, setAddedProductIds] = useState({});
-      const [isAdded, setIsAdded] = useState(false);
 
-
-  // const Add = async() => {
-  //   if (!isAuthenticated) {
-  //     // Show login modal
-  //     setLoginModalVisible(true);
-  //     return;
-  //   }
-                
-  //               try {
-  //                 // Convert product_id to number if it's a string
-  //                 const productId =  parseInt(item.product_id, 10) 
-                  
-  //                 // Show add animation
-  //                 Animated.sequence([
-  //                   Animated.timing(scaleAnim, {
-  //                     toValue: 0.95,
-  //                     duration: 100,
-  //                     useNativeDriver: true,
-  //                   }),
-  //                   Animated.timing(scaleAnim, {
-  //                     toValue: 1,
-  //                     duration: 200,
-  //                     useNativeDriver: true,
-  //                   })
-  //                 ]).start();
-                  
-  //                 // Add to cart with quantity 1 by default
-  //                 const result = await addToCart({
-  //                   product_id: productId,
-  //                   quantity: 1,
-  //                   // Include these for display purposes in the cart UI
-  //                   name: item.name,
-  //                   price: item.price,
-  //                   image: item.primary_image_url
-  //                 }, {
-  //                   routeName: 'ShopDetail',
-  //                   params: { item }
-  //                 });
-                  
-  //                 if (result?.success) {
-  //                   // Animate cart button
-  //                   Animated.sequence([
-  //                     Animated.timing(cartAnim, {
-  //                       toValue: 1,
-  //                       duration: 200,
-  //                       useNativeDriver: true,
-  //                     }),
-  //                     Animated.timing(cartAnim, {
-  //                       toValue: 0,
-  //                       duration: 200,
-  //                       useNativeDriver: true,
-  //                     })
-  //                   ]).start();
-  //                 }
-  //               }
-  //             } catch (error) {
-  //               console.error('Error adding to cart:', error);
-  //             }
-  // }
-  
   const fetchTop5Products = async () => {
     try {
       setIsLoading(true);
@@ -144,7 +84,91 @@ const ShopDetailScreen = ({ navigation, route }) => {
     );
   };
 
+  // Function to add a product to cart
+  const handleAddToCart = async (product) => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Navigation to login screen could be added here
+      Alert.alert(
+        "Authentication Required",
+        "Please login to add items to cart",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    
+    try {
+      // Convert product_id to number if it's a string
+      const productId = typeof product.product_id === 'string' 
+        ? parseInt(product.product_id, 10) 
+        : product.product_id;
+      
+      // Show add animation for visual feedback
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+      
+      // Add product to cart with quantity 1
+      const result = await addToCart({
+        product_id: productId,
+        quantity: 1,
+        // Include these for display purposes in the cart UI
+        name: product.name,
+        price: product.price,
+        image: product.primary_image_url
+      });
+      
+      if (result?.success) {
+        // Show "Added" state by updating the component state with product ID
+        setAddedProductIds(prev => ({
+          ...prev,
+          [product.product_id]: true
+        }));
+        
+        // Animate cart button for confirmation
+        Animated.sequence([
+          Animated.timing(cartAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(cartAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ]).start();
+        
+        // Reset back to "Add" after 2 seconds
+        setTimeout(() => {
+          setAddedProductIds(prev => ({
+            ...prev,
+            [product.product_id]: false
+          }));
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      Alert.alert(
+        "Error",
+        "Failed to add item to cart. Please try again.",
+        [{ text: "OK" }]
+      );
+    }
+  };
+
   const renderPopularProducts = ({ item }) => {
+    // Check if this product is in the "added" state
+    const isAdded = addedProductIds[item.product_id] || false;
     
     return (
       <TouchableOpacity 
@@ -155,7 +179,6 @@ const ShopDetailScreen = ({ navigation, route }) => {
           navigation.navigate('ProductDetail', { productId: item.product_id });
         }}
       >
-
         <Image 
           source={{ uri: item.primary_image_url }} 
           style={styles.productImage}
@@ -168,80 +191,7 @@ const ShopDetailScreen = ({ navigation, route }) => {
             <Text style={styles.productPrice}>₹{item.price}</Text>
             <TouchableOpacity 
               style={styles.addButton}
-              onPress={async () => {
-                // Check if user is authenticated
-                if (!isAuthenticated) {
-                  // Navigation to login screen could be added here
-                  Alert.alert(
-                    "Authentication Required",
-                    "Please login to add items to cart",
-                    [{ text: "OK" }]
-                  );
-                  return;
-                }
-                
-                try {
-                  // Convert product_id to number if it's a string
-                  const productId = typeof item.product_id === 'string' 
-                    ? parseInt(item.product_id, 10) 
-                    : item.product_id;
-                  
-                  // Show add animation for visual feedback
-                  Animated.sequence([
-                    Animated.timing(scaleAnim, {
-                      toValue: 0.95,
-                      duration: 100,
-                      useNativeDriver: true,
-                    }),
-                    Animated.timing(scaleAnim, {
-                      toValue: 1,
-                      duration: 200,
-                      useNativeDriver: true,
-                    })
-                  ]).start();
-                  
-                  // Add product to cart with quantity 1
-                  const result = await addToCart({
-                    product_id: productId,
-                    quantity: 1,
-                    // Include these for display purposes in the cart UI
-                    name: item.name,
-                    price: item.price,
-                    image: item.primary_image_url
-                  });
-                  
-                  if (result?.success) {
-                    // Show "Added" state
-                    setIsAdded(true);
-                    
-                    // Animate cart button for confirmation
-                    Animated.sequence([
-                      Animated.timing(cartAnim, {
-                        toValue: 1,
-                        duration: 200,
-                        useNativeDriver: true,
-                      }),
-                      Animated.timing(cartAnim, {
-                        toValue: 0,
-                        duration: 200,
-                        useNativeDriver: true,
-                      })
-                    ]).start();
-                    
-                    // Reset back to "Add" after 2 seconds
-                    setTimeout(() => {
-                      setIsAdded(false);
-                    }, 2000);
-                  }
-                } catch (error) {
-                  console.error('Error adding to cart:', error);
-                  Alert.alert(
-                    "Error",
-                    "Failed to add item to cart. Please try again.",
-                    [{ text: "OK" }]
-                  );
-                }
-              }}
+              onPress={() => handleAddToCart(item)}
             >
               <Text style={styles.addButtonText}>{isAdded ? 'Added ✓' : 'Add'}</Text>
             </TouchableOpacity>
@@ -250,6 +200,7 @@ const ShopDetailScreen = ({ navigation, route }) => {
       </TouchableOpacity>
     );
   };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -288,11 +239,6 @@ const ShopDetailScreen = ({ navigation, route }) => {
           <Text style={styles.shopName}>{item.shop_name}</Text>
 
           <View style={styles.categoryRatingContainer}>
-            {/* <View style={styles.categories}>
-              <Text style={styles.category}>Grocery</Text>
-              <Text style={styles.category}>Dairy</Text>
-              <Text style={styles.category}>Snacks</Text>
-            </View> */}
             <View style={styles.ratingContainerMain}>
               <StarRating rating={item.average_rating} />
               <Text style={styles.ratingText}>{item.average_rating}</Text>
@@ -379,28 +325,6 @@ const ShopDetailScreen = ({ navigation, route }) => {
               placeholderTextColor="#616161"
             />
           </View>
-          
-          {/* <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoriesScroll}
-          >
-            <TouchableOpacity style={[styles.categoryButton, styles.categoryButtonActive]}>
-              <Text style={[styles.categoryButtonText, styles.categoryButtonTextActive]}>All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryButton}>
-              <Text style={styles.categoryButtonText}>Grocery</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryButton}>
-              <Text style={styles.categoryButtonText}>Snacks</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryButton}>
-              <Text style={styles.categoryButtonText}>Beverages</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryButton}>
-              <Text style={styles.categoryButtonText}>Dairy</Text>
-            </TouchableOpacity>
-          </ScrollView> */}
         </View>
 
         {/* Products List */}

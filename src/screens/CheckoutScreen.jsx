@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,70 @@ import {
   SafeAreaView,
   Dimensions,
   Modal,
-  Image
+  Image,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
+import { useCart } from '../context/CartContext';
+import { useOrder } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
-const CheckoutScreen = ({ navigation }) => {
+// Success Modal Component (moved outside to prevent hooks error)
+const SuccessModal = ({ visible, onClose, total, currentOrder, navigation }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.successIcon}>🎉</Text>
+          <Text style={styles.successTitle}>Order Placed Successfully!</Text>
+          <Text style={styles.successMessage}>Your order has been confirmed and will be delivered soon.</Text>
+          
+          <View style={styles.successDetails}>
+            <Text style={styles.successDetail}>Order #: {currentOrder?.id || 'Processing'}</Text>
+            <Text style={styles.successDetail}>Estimated Delivery: 30-45 min</Text>
+            <Text style={styles.successDetail}>Total: ₹{total.toFixed(2)}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.trackOrderButton}
+            onPress={() => {
+              onClose();
+              navigation.navigate('Orders', { screen: 'OrderDetail', params: { orderId: currentOrder?.id } });
+            }}
+          >
+            <Text style={styles.trackOrderText}>Track My Order</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.continueShoppingButton}
+            onPress={() => {
+              onClose();
+              navigation.navigate('MainTabs');
+            }}
+          >
+            <Text style={styles.continueShoppingText}>Continue Shopping</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const CheckoutScreen = ({ navigation, route }) => {
   const [expandedSections, setExpandedSections] = useState({
     orderSummary: true,
     deliveryAddress: true,
     paymentMethod: true,
     promoCode: false
   });
-  const [selectedPayment, setSelectedPayment] = useState('card');
+  const [selectedPayment, setSelectedPayment] = useState('cash');
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [orderNotes, setOrderNotes] = useState('');
   
   const buttonScale = useRef(new Animated.Value(1)).current;
   const sectionHeights = useRef({
@@ -35,28 +83,34 @@ const CheckoutScreen = ({ navigation }) => {
     promoCode: new Animated.Value(0)
   }).current;
 
-  // Sample data
-  const orderItems = [
-    { id: 1, name: 'Organic Apples', price: 120, quantity: 2, image: 'https://cdn.pixabay.com/photo/2017/09/26/13/42/apple-2788662_1280.jpg' },
-    { id: 2, name: 'Fresh Milk', price: 65, quantity: 1, image: 'https://cdn.pixabay.com/photo/2017/07/05/15/41/milk-2474993_1280.jpg' }
-  ];
+  // Get cart and order contexts
+  const { cartItems, subtotal, deliveryFee, clearCart } = useCart();
+  const { createOrder, isLoading } = useOrder();
+  const { user } = useAuth();
 
-  const addresses = [
+  // Get addresses from user profile
+  const addresses = user?.addresses || [
     { id: 1, type: 'Home', address: '123 Main Street, Apt 4B, New York, NY 10001', isDefault: true },
     { id: 2, type: 'Work', address: '456 Office Park, Floor 3, New York, NY 10002', isDefault: false }
   ];
 
   const paymentMethods = [
     { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
-    { id: 'paypal', name: 'PayPal', icon: '📱' },
+    { id: 'upi', name: 'UPI', icon: '📱' },
     { id: 'cash', name: 'Cash on Delivery', icon: '💵' }
   ];
 
-  // Calculate order total
-  const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = 20;
+  // Calculate order total with discount
   const discount = promoApplied ? subtotal * 0.1 : 0;
   const total = subtotal - discount + deliveryFee;
+
+  // Set default selected address
+  useEffect(() => {
+    const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+    if (!selectedAddress) {
+      setSelectedAddress(defaultAddress);
+    }
+  }, []); // Empty dependency array to run only once
 
   // Toggle section expansion
   const toggleSection = (section) => {
@@ -90,7 +144,13 @@ const CheckoutScreen = ({ navigation }) => {
     }).start();
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
+    // Check if address is selected
+    if (!selectedAddress) {
+      Alert.alert('Error', 'Please select a delivery address');
+      return;
+    }
+
     // Button animation
     Animated.sequence([
       Animated.timing(buttonScale, {
@@ -105,10 +165,54 @@ const CheckoutScreen = ({ navigation }) => {
       })
     ]).start();
 
-    // Show success modal after a short delay
-    setTimeout(() => {
-      setShowSuccess(true);
-    }, 500);
+    try {
+      // Check if cart is empty
+      if (!cartItems || cartItems.length === 0) {
+        Alert.alert('Error', 'Your cart is empty. Please add items to your cart before placing an order.');
+        return;
+      }
+
+      // Validate the selected payment method
+      if (!['card', 'upi', 'cash', 'COD'].includes(selectedPayment)) {
+        setSelectedPayment('COD'); // Default to COD if invalid
+      }
+
+      // Prepare order data
+      const orderData = {
+        delivery_address: selectedAddress.address || '',
+        payment_method: selectedPayment === 'cash' ? 'COD' : selectedPayment,
+        notes: orderNotes || ''
+      };
+
+      // Only add promo_code if it's applied and not empty
+      if (promoApplied && promoCode.trim() !== '') {
+        orderData.promo_code = promoCode;
+      }
+
+      console.log('Sending order data:', JSON.stringify(orderData));
+
+      // Create order
+      const result = await createOrder(orderData);
+
+      if (result?.success) {
+        // Clear cart
+        clearCart();
+        
+        // Show success modal
+        setShowSuccess(true);
+      } else {
+        // Handle specific validation errors
+        if (result?.errors && result.errors.length > 0) {
+          const errorMessages = result.errors.map(err => `${err.field}: ${err.message}`).join('\n');
+          Alert.alert('Validation Error', `Please fix the following issues:\n${errorMessages}`);
+        } else {
+          Alert.alert('Error', result?.message || 'Failed to place order. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Error placing order:', error);
+      Alert.alert('Error', 'Failed to place order. Please try again.');
+    }
   };
 
   const applyPromoCode = () => {
@@ -120,7 +224,7 @@ const CheckoutScreen = ({ navigation }) => {
   const OrderSummarySection = () => {
     const heightAnim = sectionHeights.orderSummary.interpolate({
       inputRange: [0, 1],
-      outputRange: [0, orderItems.length * 80 + 180]
+      outputRange: [0, cartItems.length * 80 + 180]
     });
 
     return (
@@ -131,11 +235,11 @@ const CheckoutScreen = ({ navigation }) => {
         </TouchableOpacity>
         
         <Animated.View style={[styles.sectionContent, { height: heightAnim }]}>
-          {orderItems.map(item => (
-            <View key={item.id} style={styles.orderItem}>
-              <Image source={{ uri: item.image }} style={styles.itemImage} />
+          {cartItems.map(item => (
+            <View key={item.product_id} style={styles.orderItem}>
+              <Image source={{ uri: item.primary_image_url }} style={styles.itemImage} />
               <View style={styles.itemDetails}>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemName}>{item.product_name}</Text>
                 <Text style={styles.itemPrice}>₹{item.price} x {item.quantity}</Text>
               </View>
               <Text style={styles.itemTotal}>₹{item.price * item.quantity}</Text>
@@ -187,7 +291,14 @@ const CheckoutScreen = ({ navigation }) => {
         
         <Animated.View style={[styles.sectionContent, { height: heightAnim }]}>
           {addresses.map(address => (
-            <TouchableOpacity key={address.id} style={styles.addressCard}>
+            <TouchableOpacity 
+              key={address.id} 
+              style={[
+                styles.addressCard,
+                selectedAddress?.id === address.id && styles.selectedAddressCard
+              ]}
+              onPress={() => setSelectedAddress(address)}
+            >
               <View style={styles.addressHeader}>
                 <Text style={styles.addressType}>{address.type}</Text>
                 {address.isDefault && (
@@ -210,6 +321,7 @@ const CheckoutScreen = ({ navigation }) => {
       </View>
     );
   };
+  // ...existing code...
 
   const PaymentMethodSection = () => {
     const heightAnim = sectionHeights.paymentMethod.interpolate({
@@ -244,6 +356,19 @@ const CheckoutScreen = ({ navigation }) => {
               </View>
             </TouchableOpacity>
           ))}
+          
+          {/* Notes for order */}
+          <View style={styles.notesContainer}>
+            <Text style={styles.notesLabel}>Order Notes (Optional)</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Special instructions for delivery..."
+              multiline={true}
+              numberOfLines={3}
+              value={orderNotes}
+              onChangeText={setOrderNotes}
+            />
+          </View>
         </Animated.View>
       </View>
     );
@@ -288,33 +413,8 @@ const CheckoutScreen = ({ navigation }) => {
     );
   };
 
-  const SuccessModal = () => (
-    <Modal visible={showSuccess} transparent animationType="fade">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.successIcon}>🎉</Text>
-          <Text style={styles.successTitle}>Order Placed Successfully!</Text>
-          <Text style={styles.successMessage}>Your order has been confirmed and will be delivered soon.</Text>
-          
-          <View style={styles.successDetails}>
-            <Text style={styles.successDetail}>Order #: 123456</Text>
-            <Text style={styles.successDetail}>Estimated Delivery: 30-45 min</Text>
-            <Text style={styles.successDetail}>Total: ₹{total.toFixed(2)}</Text>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.continueShoppingButton}
-            onPress={() => {
-              setShowSuccess(false);
-              navigation.navigate('LocalMarket');
-            }}
-          >
-            <Text style={styles.continueShoppingText}>Continue Shopping</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
+  // Need to add currentOrder to the component to pass it to SuccessModal
+  const { currentOrder } = useOrder();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -343,13 +443,24 @@ const CheckoutScreen = ({ navigation }) => {
             onPressOut={handlePressOut}
             onPress={handlePlaceOrder}
             activeOpacity={0.9}
+            disabled={isLoading}
           >
-            <Text style={styles.placeOrderText}>Place Order - ₹{total.toFixed(2)}</Text>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.placeOrderText}>Place Order - ₹{total.toFixed(2)}</Text>
+            )}
           </TouchableOpacity>
         </Animated.View>
       </View>
 
-      <SuccessModal />
+      <SuccessModal 
+        visible={showSuccess} 
+        onClose={() => setShowSuccess(false)} 
+        total={total} 
+        currentOrder={currentOrder}
+        navigation={navigation}
+      />
     </SafeAreaView>
   );
 };
@@ -534,6 +645,30 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '500',
   },
+  selectedAddressCard: {
+    borderColor: '#3B82F6',
+    borderWidth: 1,
+    backgroundColor: '#F0F9FF',
+  },
+  notesContainer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  notesLabel: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    height: 80,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
   paymentMethod: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -679,6 +814,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
     marginBottom: 8,
+  },
+  trackOrderButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  trackOrderText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   continueShoppingButton: {
     backgroundColor: '#10B981',

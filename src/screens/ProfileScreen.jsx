@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,27 +8,51 @@ import {
   Image,
   Animated,
   SafeAreaView,
-  Dimensions,
+  Dimensions, 
+  Alert,
+  ActivityIndicator
 } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+// import { useOrder } from '../context/OrderContext';
+import GuestProfileScreen from './GuestProfileScreen';
+import { useOrder } from '../context/OrderContext';
 
 const { width } = Dimensions.get('window');
 
 const ProfileScreen = ({ navigation }) => {
+  const { user, logout, isAuthenticated } = useAuth();
+  // const { orders, fetchUserOrders } = useOrder();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const {GlobalOrders} = useOrder()
   
-  // User data
-  const user = {
-    name: 'Alex Johnson',
-    email: 'alex.johnson@example.com',
+  // Fetch orders when component mounts
+  // useEffect(() => {
+  //   if (isAuthenticated) {
+  //     fetchUserOrders();
+  //   }
+  // }, [isAuthenticated, fetchUserOrders]);
+  
+  // If user is not authenticated, show guest profile screen
+  if (!isAuthenticated) {
+    return <GuestProfileScreen />;
+  }
+  
+  // Default user data with actual user data if available
+  const userData = user || {
+    name: 'Guest User',
+    email: 'guest@example.com',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80',
-    orders: 12,
-    wishlist: 8,
   };
+
+  // Calculate counts
+  // const orderCount = orders ? orders.length : 0;
+  const wishlistCount = userData.wishlist || 0;
 
   // Menu items
   const menuItems = [
-    { id: 1, title: 'Orders', icon: '📦', count: user.orders, color: '#FF9E80' },
-    { id: 2, title: 'Saved Items', icon: '❤️', count: user.wishlist, color: '#FF80AB' },
+    { id: 1, title: 'Orders', icon: '📦', count:GlobalOrders,color: '#FF9E80' },
+    { id: 2, title: 'Saved Items', icon: '❤️', count: wishlistCount, color: '#FF80AB' },
     { id: 3, title: 'Payment Methods', icon: '💳', color: '#80CBC4' },
     { id: 4, title: 'Settings', icon: '⚙️', color: '#90CAF9' },
     { id: 5, title: 'Help & Support', icon: '❓', color: '#CE93D8' },
@@ -51,28 +75,78 @@ const ProfileScreen = ({ navigation }) => {
     }).start();
   };
 
-  const handleMenuItemPress = (item) => {
+  const handleMenuItemPress = async (item) => {
     if (item.title === 'Logout') {
-      // Handle logout logic
-      console.log('Logout pressed');
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: async () => {
+              setIsLoggingOut(true);
+              try {
+                await logout(navigation);
+                // Navigation is now handled directly by the logout function
+              } catch (error) {
+                Alert.alert('Error', 'Failed to logout. Please try again.');
+              } finally {
+                setIsLoggingOut(false);
+              }
+            },
+          },
+        ],
+        { cancelable: true }
+      );
     }
     if(item.title==='Saved Items') {
       // Navigate to appropriate screen
       navigation.navigate('WishList');
     }
+    if(item.title==='Orders') {
+      // Navigate to appropriate screen
+      navigation.navigate('Orders');
+    }
+  };
+  
+  // Handle navigation to auth screen
+  const handleLoginPress = () => {
+    navigation.navigate('Auth', { screen: 'login' });
+  };
+  
+  const handleSignupPress = () => {
+    navigation.navigate('Auth', { screen: 'signup' });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header with Avatar */}
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            <Image source={{ uri: user.avatar }} style={styles.avatar} />
-            <View style={styles.avatarBorder} />
-          </View>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+      {isLoggingOut && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+          <Text style={styles.loadingText}>Logging out...</Text>
+        </View>
+      )}
+      
+      {!isAuthenticated ? (
+        <GuestProfileScreen 
+          onLogin={handleLoginPress}
+          onSignup={handleSignupPress}
+        />
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {/* Header with Avatar */}
+          <View style={styles.header}>
+            <View style={styles.avatarContainer}>
+              <Image source={{ uri: userData.avatar }} style={styles.avatar} />
+              <View style={styles.avatarBorder} />
+            </View>
+            <Text style={styles.userName}>{userData.name}</Text>
+            <Text style={styles.userEmail}>{userData.email}</Text>
           
           <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
             <TouchableOpacity 
@@ -88,18 +162,19 @@ const ProfileScreen = ({ navigation }) => {
         {/* Stats Overview */}
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.orders}</Text>
+            <Text style={styles.statNumber}>0</Text>
             <Text style={styles.statLabel}>Orders</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.wishlist}</Text>
+            <Text style={styles.statNumber}>{wishlistCount}</Text>
             <Text style={styles.statLabel}>Wishlist</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>4.8</Text>
             <Text style={styles.statLabel}>Rating</Text>
+            <Text>{GlobalOrders}</Text>
           </View>
         </View>
 
@@ -124,7 +199,8 @@ const ProfileScreen = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };

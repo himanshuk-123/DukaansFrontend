@@ -1,10 +1,118 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Dukaan Frontend - React Native E-commerce App
 
-# Getting Started
+## Project Overview
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Dukaan is a full-featured e-commerce mobile application built with React Native that connects local shops and customers. The application provides a seamless shopping experience with features like product browsing, authentication, cart management, checkout, and order tracking.
 
-## Step 1: Start Metro
+## Recent Implementation: Authentication Flow & Cart Integration
+
+### Authentication System
+
+Recently implemented a comprehensive authentication flow that includes:
+
+- **User Registration**: Complete signup flow with validation and success redirection
+- **User Login**: JWT-based authentication with secure token storage
+- **Token Management**: Automatic token inclusion in API requests via Axios interceptors
+- **Profile Management**: Real-time user data fetching for the profile screen
+- **Guest Mode**: Allow browsing without authentication, but require login for actions like adding to cart
+
+### Cart Functionality
+
+Integrated the cart system with authentication to provide:
+
+- **Auth-Protected Actions**: Authentication check before cart operations
+- **Login Modal**: Modern interactive login prompt for guest users
+- **Backend Integration**: Full integration with cart API endpoints
+- **State Management**: Comprehensive cart state management with Context API
+- **Persistent Cart**: Cart data is preserved between sessions for authenticated users
+
+### Technical Implementation Details
+
+1. **Auth Service (`auth.js`)**
+   - Implemented API calls for login, registration, logout, and profile
+   - Added token storage with AsyncStorage
+   - Added error handling and consistent response formatting
+
+2. **Cart Service (`cart.js`)**
+   - Created service for cart API operations
+   - Implemented methods for adding, removing, updating cart items
+   - Added proper error handling and response formatting
+
+3. **Auth Context (`AuthContext.js`)**
+   - Global state management for authentication
+   - User state persistence between app sessions
+   - Login, registration, and logout functionality
+
+4. **Cart Context (`CartContext.js`)**
+   - Global state management for cart operations
+   - Integration with authentication state
+   - Navigation state management for redirection after login
+
+5. **Login Modal (`LoginPromptModal.jsx`)**
+   - Modern UI component for login/signup prompts
+   - Appears when guest users attempt restricted actions
+   - Options to login, signup, or continue as guest
+
+6. **Product Detail Screen (`ProductDetailScreen.jsx`)**
+   - Authentication check before adding to cart
+   - Integration with login modal for guest users
+   - Cart operation state management
+
+## Technologies Used
+
+- **React Native**: Core UI framework
+- **React Navigation**: Screen navigation
+- **AsyncStorage**: Persistent data storage
+- **Axios**: API requests with interceptors for auth tokens
+- **Context API**: Global state management
+
+## Installation
+
+1. Clone the repository
+   ```
+   git clone https://github.com/himanshuk-123/DukaansFrontend.git
+   ```
+
+2. Install dependencies
+   ```
+   cd localmarket
+   npm install
+   ```
+
+3. Start the Metro server
+   ```
+   npx react-native start
+   ```
+
+4. Run the application
+   ```
+   npx react-native run-android
+   # or
+   npx react-native run-ios
+   ```
+
+## Project Structure
+
+- **`/src/components`**: Reusable UI components
+- **`/src/context`**: Context providers for global state
+- **`/src/navigation`**: Navigation configuration
+- **`/src/screens`**: Application screens
+- **`/src/services`**: API services
+- **`/assets`**: Static assets like images
+
+## Next Steps
+
+- Implement order history and tracking
+- Add address management
+- Integrate payment gateways
+- Implement product search and filtering
+- Add push notifications for order updates
+
+## Original React Native Documentation
+
+If you're looking for the original React Native setup instructions, see below:
+
+### Step 1: Start Metro
 
 First, you will need to run **Metro**, the JavaScript build tool for React Native.
 
@@ -18,11 +126,11 @@ npm start
 yarn start
 ```
 
-## Step 2: Build and run your app
+### Step 2: Build and run your app
 
 With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
 
-### Android
+#### Android
 
 ```sh
 # Using npm

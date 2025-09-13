@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,12 @@ import {
   Dimensions,
   Platform
 } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const WishlistScreen = ({ navigation }) => {
+  const { isAuthenticated, requireAuth } = useAuth();
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [wishlistItems, setWishlistItems] = useState([
     {
@@ -67,6 +69,51 @@ const WishlistScreen = ({ navigation }) => {
       isLiked: true
     }
   ]);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  // Check if user is authenticated
+  const checkAuth = () => {
+    if (!isAuthenticated) {
+      requireAuth({
+        feature: 'wishlist',
+        title: 'Sign in to View Wishlist',
+        message: 'Create an account or sign in to view and manage your wishlist.',
+        returnTo: 'WishList'
+      });
+    }
+  };
+
+  // If user is not authenticated, show empty state
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Image 
+          source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3875/3875148.png' }}
+          style={styles.emptyImage}
+        />
+        <Text style={styles.emptyTitle}>Sign in to View Your Wishlist</Text>
+        <Text style={styles.emptyText}>
+          Your wishlist allows you to save items you love for later.
+        </Text>
+        <TouchableOpacity 
+          style={styles.signInButton}
+          onPress={() => navigation.navigate('Auth', { screen: 'Login', params: { returnTo: 'WishList' } })}
+        >
+          <Text style={styles.signInButtonText}>Sign In</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.browseButton}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'HomeTab' })}
+        >
+          <Text style={styles.browseButtonText}>Browse Products</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -214,7 +261,7 @@ const WishlistScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>Start saving your favorite items</Text>
           <TouchableOpacity 
             style={styles.browseButton}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.navigate('MainTabs', { screen: 'HomeTab' })}
           >
             <Text style={styles.browseButtonText}>Browse Products</Text>
           </TouchableOpacity>
@@ -395,6 +442,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#212121',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: 14,
@@ -406,7 +454,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E7D32',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: 8,
   },
   browseButtonText: {
     color: '#FFFFFF',
@@ -427,6 +475,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // New styles for empty container and auth prompt
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  emptyImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+  },
+  signInButton: {
+    backgroundColor: '#2E7D32',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 12,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  signInButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  }
 });
 
 export default WishlistScreen;
