@@ -1,10 +1,11 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons'; // Make sure you have this package installed
 import LocalMarketScreen from '../screens/LocalMarketScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-
+import home from '../../assets/images/home.png';
+import profile from '../../assets/images/profile.png';
 const Tab = createBottomTabNavigator();
 
 /**
@@ -38,7 +39,7 @@ const BottomTabNavigator = () => {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Icon name="home" color={color} size={size} />
+            <Image source={home} style={{ tintColor: color, width: size, height: size }} />
           ),
         }}
       />
@@ -48,7 +49,7 @@ const BottomTabNavigator = () => {
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Icon name="person" color={color} size={size} />
+            <Image source={profile} style={{ tintColor: color, width: size, height: size }} />
           ),
         }}
       />

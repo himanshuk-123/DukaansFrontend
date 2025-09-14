@@ -2,9 +2,14 @@ import axios from 'axios'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 // Use a consistent base URL
-const API_BASE_URL = 'http://10.97.167.184:3000/api';
+// Change this to your current IP address when testing
+const API_BASE_URL = 'http://192.168.230.184:3000/api';
+// For local development, you might want to use:
+// const API_BASE_URL = 'http://10.0.2.2:3000/api'; // For Android emulator
+// const API_BASE_URL = 'http://localhost:3000/api'; // For iOS simulator
 
-// Rate limiting settings
+// Log the base URL to help with debugging
+console.log('API Base URL:', API_BASE_URL);
 const RATE_LIMIT_STORAGE_KEY = 'api_rate_limit_data';
 const DEFAULT_RETRY_DELAY = 2000; // 2 seconds (reduced from 5)
 const MAX_RETRY_DELAY = 30000; // 30 seconds (reduced from 1 minute)
@@ -47,6 +52,12 @@ export const initializeToken = async () => {
 // Add request interceptor to include token in all requests
 api.interceptors.request.use(
   async (config) => {
+    // Log the request for debugging
+    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`, {
+      headers: config.headers,
+      data: config.data
+    });
+    
     if (!config.headers.Authorization) {
       const token = await AsyncStorage.getItem('auth_token');
       if (token) {
@@ -55,7 +66,10 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('Request interceptor error:', error);
+    return Promise.reject(error);
+  }
 );
 
 // Add response interceptor for debugging and error handling
